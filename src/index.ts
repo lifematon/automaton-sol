@@ -8,6 +8,7 @@
  */
 
 import { getWallet, getAutomatonDir } from "./identity/wallet.js";
+import { getSolanaWalletAddress, getSolanaWallet } from "./identity/solana-wallet.js";
 import { provision, loadApiKeyFromConfig } from "./identity/provision.js";
 import { loadConfig, resolvePath } from "./config.js";
 import { createDatabase } from "./state/database.js";
@@ -59,10 +60,13 @@ Environment:
 
   if (args.includes("--init")) {
     const { account, isNew } = await getWallet();
+    const { keypair: solanaKeypair, isNew: solanaIsNew } = await getSolanaWallet();
     console.log(
       JSON.stringify({
         address: account.address,
         isNew,
+        solanaAddress: solanaKeypair.publicKey.toBase58(),
+        solanaIsNew,
         configDir: getAutomatonDir(),
       }),
     );
@@ -121,10 +125,13 @@ async function showStatus(): Promise<void> {
   const children = db.getChildren();
   const registry = db.getRegistryEntry();
 
+  const solanaAddress = config.solanaWalletAddress || getSolanaWalletAddress();
+
   console.log(`
 === AUTOMATON STATUS ===
 Name:       ${config.name}
 Address:    ${config.walletAddress}
+Solana:     ${solanaAddress || "not configured"}
 Creator:    ${config.creatorAddress}
 Sandbox:    ${config.sandboxId}
 State:      ${state}
@@ -154,7 +161,7 @@ async function run(): Promise<void> {
     config = await runSetupWizard();
   }
 
-  // Load wallet
+  // Load EVM wallet
   const { account } = await getWallet();
   const apiKey = config.conwayApiKey || loadApiKeyFromConfig();
   if (!apiKey) {
@@ -162,6 +169,16 @@ async function run(): Promise<void> {
       "No API key found. Run: automaton --provision",
     );
     process.exit(1);
+  }
+
+  // Load Solana wallet (non-fatal if missing)
+  let solanaAddress: string | undefined;
+  try {
+    const { keypair } = await getSolanaWallet();
+    solanaAddress = keypair.publicKey.toBase58();
+    console.log(`[${new Date().toISOString()}] Solana wallet: ${solanaAddress}`);
+  } catch (err: any) {
+    console.warn(`[${new Date().toISOString()}] Solana wallet load failed: ${err.message}`);
   }
 
   // Build identity
@@ -173,6 +190,7 @@ async function run(): Promise<void> {
     sandboxId: config.sandboxId,
     apiKey,
     createdAt: new Date().toISOString(),
+    solanaAddress,
   };
 
   // Initialize database
@@ -184,6 +202,12 @@ async function run(): Promise<void> {
   db.setIdentity("address", account.address);
   db.setIdentity("creator", config.creatorAddress);
   db.setIdentity("sandbox", config.sandboxId);
+  if (solanaAddress) {
+    db.setIdentity("solana_address", solanaAddress);
+    if (config.solanaNetwork) {
+      db.setKV("solana_network", config.solanaNetwork);
+    }
+  }
 
   // Create Conway client
   const conway = createConwayClient({

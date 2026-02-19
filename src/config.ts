@@ -78,6 +78,8 @@ export function createConfig(params: {
   registeredWithConway: boolean;
   sandboxId: string;
   walletAddress: Address;
+  solanaWalletAddress?: string;
+  solanaNetwork?: "mainnet-beta" | "devnet";
   apiKey: string;
   openaiApiKey?: string;
   anthropicApiKey?: string;
@@ -102,6 +104,8 @@ export function createConfig(params: {
     dbPath: DEFAULT_CONFIG.dbPath || "~/.automaton/state.db",
     logLevel: (DEFAULT_CONFIG.logLevel as AutomatonConfig["logLevel"]) || "info",
     walletAddress: params.walletAddress,
+    solanaWalletAddress: params.solanaWalletAddress,
+    solanaNetwork: params.solanaNetwork || "mainnet-beta",
     version: DEFAULT_CONFIG.version || "0.1.0",
     skillsDir: DEFAULT_CONFIG.skillsDir || "~/.automaton/skills",
     maxChildren: DEFAULT_CONFIG.maxChildren || 3,

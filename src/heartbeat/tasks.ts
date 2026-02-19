@@ -14,6 +14,7 @@ import type {
 } from "../types.js";
 import { getSurvivalTier } from "../conway/credits.js";
 import { getUsdcBalance } from "../conway/x402.js";
+import { getSolanaBalances } from "../conway/solana.js";
 
 export interface HeartbeatTaskContext {
   identity: AutomatonIdentity;
@@ -147,6 +148,35 @@ export const BUILTIN_TASKS: Record<string, HeartbeatTaskFn> = {
       shouldWake: true,
       message: `${newCount} new message(s) from: ${messages.map((m) => m.from.slice(0, 10)).join(", ")}`,
     };
+  },
+
+  check_solana_balance: async (ctx) => {
+    const solanaAddress = ctx.identity.solanaAddress;
+    if (!solanaAddress) return { shouldWake: false };
+
+    const network = ctx.db.getKV("solana_network") || "mainnet-beta";
+    const result = await getSolanaBalances(solanaAddress, network);
+
+    ctx.db.setKV("last_solana_check", JSON.stringify({
+      solBalance: result.solBalance,
+      usdcBalance: result.usdcBalance,
+      network: result.network,
+      ok: result.ok,
+      timestamp: new Date().toISOString(),
+    }));
+
+    // Wake the agent if there's incoming USDC on Solana but low credits
+    if (result.ok && result.usdcBalance > 0.5) {
+      const credits = await ctx.conway.getCreditsBalance();
+      if (credits < 500) {
+        return {
+          shouldWake: true,
+          message: `Have ${result.usdcBalance.toFixed(4)} USDC on Solana but only $${(credits / 100).toFixed(2)} credits.`,
+        };
+      }
+    }
+
+    return { shouldWake: false };
   },
 
   check_for_updates: async (ctx) => {

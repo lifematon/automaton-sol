@@ -15,6 +15,7 @@ import type {
 } from "../types.js";
 import { getSurvivalTier, formatCredits } from "../conway/credits.js";
 import { getUsdcBalance } from "../conway/x402.js";
+import { getSolanaBalances } from "../conway/solana.js";
 
 export interface ResourceStatus {
   financial: FinancialState;
@@ -38,11 +39,25 @@ export async function checkResources(
     creditsCents = await conway.getCreditsBalance();
   } catch {}
 
-  // Check USDC
+  // Check EVM USDC on Base
   let usdcBalance = 0;
   try {
     usdcBalance = await getUsdcBalance(identity.address);
   } catch {}
+
+  // Check Solana balances (if a Solana wallet is configured)
+  let solBalance: number | undefined;
+  let solUsdcBalance: number | undefined;
+  if (identity.solanaAddress) {
+    try {
+      const network = db.getKV("solana_network") || "mainnet-beta";
+      const solana = await getSolanaBalances(identity.solanaAddress, network);
+      if (solana.ok) {
+        solBalance = solana.solBalance;
+        solUsdcBalance = solana.usdcBalance;
+      }
+    } catch {}
+  }
 
   // Check sandbox health
   let sandboxHealthy = true;
@@ -56,6 +71,8 @@ export async function checkResources(
   const financial: FinancialState = {
     creditsCents,
     usdcBalance,
+    solBalance,
+    solUsdcBalance,
     lastChecked: new Date().toISOString(),
   };
 
@@ -85,12 +102,22 @@ export async function checkResources(
 export function formatResourceReport(status: ResourceStatus): string {
   const lines = [
     `=== RESOURCE STATUS ===`,
-    `Credits: ${formatCredits(status.financial.creditsCents)}`,
-    `USDC: ${status.financial.usdcBalance.toFixed(6)}`,
-    `Tier: ${status.tier}${status.tierChanged ? ` (changed from ${status.previousTier})` : ""}`,
-    `Sandbox: ${status.sandboxHealthy ? "healthy" : "UNHEALTHY"}`,
-    `Checked: ${status.financial.lastChecked}`,
-    `========================`,
+    `Credits:     ${formatCredits(status.financial.creditsCents)}`,
+    `USDC (Base): ${status.financial.usdcBalance.toFixed(6)}`,
   ];
+
+  if (status.financial.solBalance !== undefined) {
+    lines.push(`SOL:         ${status.financial.solBalance.toFixed(6)}`);
+  }
+  if (status.financial.solUsdcBalance !== undefined) {
+    lines.push(`USDC (SOL):  ${status.financial.solUsdcBalance.toFixed(6)}`);
+  }
+
+  lines.push(
+    `Tier:        ${status.tier}${status.tierChanged ? ` (changed from ${status.previousTier})` : ""}`,
+    `Sandbox:     ${status.sandboxHealthy ? "healthy" : "UNHEALTHY"}`,
+    `Checked:     ${status.financial.lastChecked}`,
+    `========================`,
+  );
   return lines.join("\n");
 }

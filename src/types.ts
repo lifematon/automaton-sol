@@ -16,10 +16,17 @@ export interface AutomatonIdentity {
   sandboxId: string;
   apiKey: string;
   createdAt: string;
+  solanaAddress?: string;
 }
 
 export interface WalletData {
   privateKey: `0x${string}`;
+  createdAt: string;
+}
+
+export interface SolanaWalletData {
+  secretKey: string; // base64-encoded 64-byte secret key
+  publicKey: string; // base58-encoded public key
   createdAt: string;
 }
 
@@ -48,6 +55,8 @@ export interface AutomatonConfig {
   dbPath: string;
   logLevel: "debug" | "info" | "warn" | "error";
   walletAddress: Address;
+  solanaWalletAddress?: string;
+  solanaNetwork?: "mainnet-beta" | "devnet";
   version: string;
   skillsDir: string;
   agentId?: string;
@@ -199,6 +208,8 @@ export interface HeartbeatPingPayload {
 export interface FinancialState {
   creditsCents: number;
   usdcBalance: number;
+  solBalance?: number;
+  solUsdcBalance?: number;
   lastChecked: string;
 }
 
